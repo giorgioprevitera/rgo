@@ -1,88 +1,108 @@
 package main
 
 import (
-	"context"
-	"io"
+	"bytes"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 
-	"golang.org/x/oauth2"
+	"github.com/fatih/color"
+	"github.com/jroimartin/gocui"
+	"github.com/mitchellh/mapstructure"
 )
 
-type oauthSession struct {
-	config *oauth2.Config
-	state  string
-	code   string
-	server http.Server
-	done   chan bool
+type app struct {
+	gui    *gocui.Gui
+	client *http.Client
 }
 
-func newOauthSession() *oauthSession {
-	o := &oauthSession{
-		config: &oauth2.Config{
-			ClientID:     "OskDlD8hMZeV5w",
-			ClientSecret: "mr9UbAo0eyK5v4dRY2H-Q0wdS2A",
-			Scopes:       []string{"identity", "read"},
-			Endpoint: oauth2.Endpoint{
-				AuthURL:  "https://www.reddit.com/api/v1/authorize",
-				TokenURL: "https://www.reddit.com/api/v1/access_token",
-			},
-			RedirectURL: "http://127.0.0.1:65010",
-		},
-		state: "myrandomstatestring",
+func getData() *listing {
+	log.Println("getting data")
+	client := getClient()
+
+	res, err := client.Get("https://oauth.reddit.com/hot")
+	if err != nil {
+		log.Panic("unable to retrieve response", err)
 	}
-	return o
-}
+	defer res.Body.Close()
 
-func shutdown(w http.ResponseWriter, r *http.Request) {
+	var buf bytes.Buffer
+	buf.ReadFrom(res.Body)
 
-}
+	var things thing
 
-func (o *oauthSession) callbackHandler(w http.ResponseWriter, r *http.Request) {
-	if r.FormValue("state") != o.state {
-		log.Println("invalid oauth google state")
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-		return
-	}
-	o.code = r.FormValue("code")
-	o.server.Shutdown(context.Background())
-}
+	// res, _ := ioutil.ReadFile("dump.json")
+	// json.Unmarshal(res, &things)
 
-func (o *oauthSession) retrieveCode() {
-	url := o.config.AuthCodeURL(o.state, oauth2.AccessTypeOffline)
-	log.Println("retrieving code from", url)
+	json.Unmarshal(buf.Bytes(), &things)
 
-	m := http.NewServeMux()
-	o.server = http.Server{Addr: ":65010", Handler: m}
-	m.HandleFunc("/", o.callbackHandler)
-	o.server.ListenAndServe()
-}
-
-type transport struct {
-	http.RoundTripper
-	useragent string
-}
-
-// Any request headers can be modified here.
-func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error) {
-	req.Header.Set("User-Agent", t.useragent)
-	return t.RoundTripper.RoundTrip(req)
+	l := &listing{}
+	mapstructure.Decode(things.Data, l)
+	return l
 }
 
 func main() {
-	o := newOauthSession()
-	o.retrieveCode()
-	c := &http.Client{}
-	c.Transport = &transport{http.DefaultTransport, "goreddit cli client"}
-	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, c)
-
-	tok, err := o.config.Exchange(ctx, o.code)
+	f, err := os.OpenFile("rgo.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("error opening file: %v", err)
 	}
+	defer f.Close()
+	log.SetOutput(f)
 
-	client := o.config.Client(ctx, tok)
-	res, _ := client.Get("https://oauth.reddit.com/api/v1/me")
-	io.Copy(os.Stdout, res.Body)
+	var a app
+
+	a.gui, err = gocui.NewGui(gocui.OutputNormal)
+	if err != nil {
+		log.Panicln(err)
+	}
+	defer a.gui.Close()
+
+	a.gui.SetManagerFunc(layout)
+	setKeybindings(a.gui)
+
+	if err := a.gui.MainLoop(); err != nil && err != gocui.ErrQuit {
+		log.Panicln(err)
+	}
+}
+
+func populateView(g *gocui.Gui, v *gocui.View) error {
+	log.Println("populating main view")
+	v.Clear()
+	green := color.New(color.FgGreen)
+	l := getData()
+	for _, c := range l.Children {
+		green.Fprintf(v, "%s \t %s\n", c.Data["subreddit_name_prefixed"], c.Data["title"])
+	}
+	return nil
+}
+
+func layout(g *gocui.Gui) error {
+	maxX, maxY := g.Size()
+	if v, err := g.SetView("post", maxX/2, 0, maxX, maxY); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+		log.Println("init post view")
+		v.Title = "post"
+		v.Highlight = true
+		v.Wrap = true
+		v.Editable = true
+
+	}
+	v, err := g.SetView("main", 0, 0, maxX/2, maxY)
+	if err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+		log.Println("init main view")
+		v.Title = "main"
+		v.Highlight = true
+		v.Wrap = false
+		v.Editable = true
+		populateView(g, v)
+
+	}
+	g.SetCurrentView("main")
+	return nil
 }
