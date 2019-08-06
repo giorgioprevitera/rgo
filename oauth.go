@@ -8,6 +8,8 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os/exec"
+	"runtime"
 
 	"github.com/giorgioprevitera/oauth2"
 )
@@ -21,7 +23,7 @@ type oauthSession struct {
 }
 
 func newOauthSession() *oauthSession {
-	o := &oauthSession{
+	return &oauthSession{
 		config: &oauth2.Config{
 			ClientID:     "OskDlD8hMZeV5w",
 			ClientSecret: "mr9UbAo0eyK5v4dRY2H-Q0wdS2A",
@@ -35,7 +37,6 @@ func newOauthSession() *oauthSession {
 		},
 		state: "4UfyGdH5W8DEM78F60mqZEavvvI",
 	}
-	return o
 }
 
 func saveToken(token *oauth2.Token) error {
@@ -99,8 +100,29 @@ func (o *oauthSession) retrieveCode() {
 	url := o.config.AuthCodeURL(o.state, oauth2.AccessTypeOffline)
 	log.Println("retrieving code from", url)
 
+	go openbrowser(url)
+
 	m := http.NewServeMux()
 	o.server = http.Server{Addr: ":65010", Handler: m}
 	m.HandleFunc("/", o.callbackHandler)
 	o.server.ListenAndServe()
+}
+
+func openbrowser(url string) {
+	var err error
+
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		err = fmt.Errorf("unsupported platform")
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+
 }
