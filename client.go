@@ -17,6 +17,7 @@ func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 	return t.RoundTripper.RoundTrip(req)
 }
 
+// getContext injects a custom User Agent, required to authenticate against the Reddit APIs
 func getContext() context.Context {
 	c := &http.Client{}
 	c.Transport = &transport{http.DefaultTransport, "rgo is an Open Source CLI client for Reddit git@github.com:giorgioprevitera/rgo.git"}
