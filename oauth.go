@@ -12,6 +12,7 @@ import (
 	"runtime"
 
 	"github.com/giorgioprevitera/oauth2"
+	"github.com/pkg/browser"
 )
 
 type oauthSession struct {
@@ -100,7 +101,7 @@ func (o *oauthSession) retrieveCode() {
 	url := o.config.AuthCodeURL(o.state, oauth2.AccessTypeOffline)
 	log.Println("retrieving code from", url)
 
-	go openbrowser(url)
+	browser.OpenURL(url)
 
 	m := http.NewServeMux()
 	o.server = http.Server{Addr: ":65010", Handler: m}
