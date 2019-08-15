@@ -127,3 +127,8 @@ func openbrowser(url string) {
 	}
 
 }
+
+func getUrl(url string, client *http.Client) (*http.Response, error) {
+	res, err := client.Get(url)
+	return res, err
+}
