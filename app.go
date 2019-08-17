@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -13,16 +14,17 @@ import (
 )
 
 type app struct {
-	client     *http.Client
-	listings   []*redditproto.Link
-	postList   *tview.List
-	app        *tview.Application
-	pages      *tview.Pages
-	post       *tview.TextView
-	comments   *tview.TreeView
-	info       *tview.TextView
-	layout     *tview.Flex
-	activePost *redditproto.Link
+	client         *http.Client
+	listings       []*redditproto.Link
+	postList       *tview.List
+	app            *tview.Application
+	pages          *tview.Pages
+	post           *tview.TextView
+	comments       *tview.TreeView
+	info           *tview.TextView
+	layout         *tview.Flex
+	activePost     *redditproto.Link
+	activeComments []*redditproto.Comment
 }
 
 func newApp() (*app, error) {
@@ -31,7 +33,7 @@ func newApp() (*app, error) {
 	a.init()
 	a.createGui()
 
-	a.listings = getPosts("https://oauth.reddit.com/hot", a.client)
+	a.listings = getPosts("https://oauth.reddit.com/rising", a.client)
 	a.populatePosts()
 
 	return a, nil
@@ -79,7 +81,7 @@ func (a *app) createGui() {
 
 func (a *app) populatePosts() {
 	a.postList.Clear()
-	for i, c := range a.listings {
+	for _, c := range a.listings {
 		title := fmt.Sprintf("%s", *c.Title)
 		secondaryText := fmt.Sprintf("%s - %s - %d - %.f\n\n",
 			*c.Subreddit,
@@ -87,20 +89,31 @@ func (a *app) populatePosts() {
 			*c.Score,
 			*c.Created,
 		)
-		a.postList.AddItem(title, secondaryText, rune(i+97), nil)
+		a.postList.AddItem(title, secondaryText, 0, nil)
 	}
 }
 
 func getPosts(url string, client *http.Client) []*redditproto.Link {
 	responseBytes := getParsableBytes(url, client)
-	link, _, _, _ := redditproto.ParseListing(responseBytes)
-	log.Println("link", link)
-	log.Println("len link", len(link))
-	return link
+	links, _, _, _ := redditproto.ParseListing(responseBytes)
+	log.Println("len links", len(links))
+	return links
+}
+
+func getThread(url string, client *http.Client) (*redditproto.Link, error) {
+	responseBytes := getParsableBytes(url, client)
+	comments, err := redditproto.ParseThread(responseBytes)
+	if err != nil {
+		log.Println("getThread", err)
+		return nil, errors.New(err.Error())
+	}
+	log.Println("comments", comments)
+	return comments, nil
 }
 
 func getParsableBytes(url string, client *http.Client) []byte {
 	var buf bytes.Buffer
+	var err error
 
 	useCachedResults := false
 	responseBytes := buf.Bytes()
@@ -109,7 +122,10 @@ func getParsableBytes(url string, client *http.Client) []byte {
 
 	if useCachedResults {
 		log.Println("using cached results")
-		responseBytes, _ = ioutil.ReadFile("dump.json")
+		responseBytes, err = ioutil.ReadFile("dump.json")
+		if err != nil {
+			log.Panic(err)
+		}
 	} else {
 		res, err := getUrl(url, client)
 		if err != nil {
@@ -120,5 +136,6 @@ func getParsableBytes(url string, client *http.Client) []byte {
 		buf.ReadFrom(res.Body)
 		responseBytes = buf.Bytes()
 	}
+	log.Printf("responseBytes: %s", responseBytes)
 	return responseBytes
 }

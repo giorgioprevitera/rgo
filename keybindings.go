@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"strconv"
 
 	"github.com/gdamore/tcell"
 	"github.com/rivo/tview"
@@ -38,29 +37,44 @@ func (a *app) setKeybindings() {
 
 func (a *app) postHandler(i int, title string, secondaryText string, shortcut rune) {
 	log.Println("handling post", i)
+
 	a.activePost = a.listings[i]
+	subreddit := *a.activePost.Subreddit
+	id := *a.activePost.Id
 
-	a.post.SetTitle(fmt.Sprintf("%s", *a.activePost.Subreddit))
-	a.post.SetText(fmt.Sprintf("%s\n%s - %d - %.f\n%s\n\n%s",
-		*a.activePost.Title,
-		*a.activePost.Author,
-		*a.activePost.Score,
-		*a.activePost.Created,
-		*a.activePost.Url,
-		*a.activePost.Selftext,
-	))
+	url := fmt.Sprintf("https://oauth.reddit.com/r/%s/comments/%s", subreddit, id)
 
-	a.goToPost()
+	thread, err := getThread(url, a.client)
+	// thread.GetComments()
+	a.activeComments = thread.Comments
+	log.Println("thread.comments:", thread.Comments)
+	if err != nil {
+		log.Println("something went wrong retrieving", url)
+	} else {
+		log.Println("thread:", thread)
+
+		a.post.SetTitle(*thread.Title)
+
+		a.post.SetText(fmt.Sprintf("%s\n%s - %d - %.f\n%s\n\n%s",
+			*a.activePost.Title,
+			*a.activePost.Author,
+			*a.activePost.Score,
+			*a.activePost.Created,
+			*a.activePost.Url,
+			*a.activePost.Selftext,
+		))
+
+		a.goToPost()
+	}
 }
 
 func (a *app) commentsHandler() {
 	log.Println("going to comments")
-	node := tview.NewTreeNode("my comment")
-	subreddit := *a.activePost.Subreddit
-	id := *a.activePost.Id
-	_ = getPosts(fmt.Sprintf("https://oauth.reddit.com/%s/comments/%s", subreddit, id), a.client)
-	for i := 0; i <= 5; i++ {
-		n := tview.NewTreeNode(fmt.Sprintf("%s - this\n\nis\n\nmultiline", strconv.Itoa(i)))
+	log.Println(a.activeComments[0])
+	node := tview.NewTreeNode("comments")
+	for _, c := range a.activeComments {
+		n := tview.NewTreeNode(fmt.Sprintf("%s - %s", *c.Author, *c.Body))
+		log.Println("c: ", c)
 		node.AddChild(n)
 	}
 	a.comments.SetRoot(node)
