@@ -21,6 +21,9 @@ require (
 	github.com/nsf/termbox-go v0.0.0-20190624072549-eeb6cd0a1762 // indirect
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
 	github.com/rivo/tview v0.0.0-20190721135419-23dc8a0944e4
+	github.com/stretchr/testify v1.4.0
+	github.com/turnage/graw v0.0.0-20190218184947-3295929039f6
+	github.com/turnage/redditproto v0.0.0-20151223012412-afedf1b6eddb // indirect
 	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4 // indirect
 	golang.org/x/exp v0.0.0-20190731235908-ec7cb31e5a56 // indirect
 	golang.org/x/image v0.0.0-20190802002840-cff245a6509b // indirect

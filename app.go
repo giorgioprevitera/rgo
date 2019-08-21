@@ -13,8 +13,12 @@ import (
 	"github.com/rivo/tview"
 )
 
+type getter interface {
+	Get(url string) (resp *http.Response, err error)
+}
+
 type app struct {
-	client         *http.Client
+	client         getter
 	listings       []*redditproto.Link
 	postList       *tview.List
 	app            *tview.Application
@@ -93,14 +97,14 @@ func (a *app) populatePosts() {
 	}
 }
 
-func getPosts(url string, client *http.Client) []*redditproto.Link {
+func getPosts(url string, client getter) []*redditproto.Link {
 	responseBytes := getParsableBytes(url, client)
 	links, _, _, _ := redditproto.ParseListing(responseBytes)
 	log.Println("len links", len(links))
 	return links
 }
 
-func getThread(url string, client *http.Client) (*redditproto.Link, error) {
+func getThread(url string, client getter) (*redditproto.Link, error) {
 	responseBytes := getParsableBytes(url, client)
 	comments, err := redditproto.ParseThread(responseBytes)
 	if err != nil {
@@ -111,7 +115,7 @@ func getThread(url string, client *http.Client) (*redditproto.Link, error) {
 	return comments, nil
 }
 
-func getParsableBytes(url string, client *http.Client) []byte {
+func getParsableBytes(url string, client getter) []byte {
 	var buf bytes.Buffer
 	var err error
 

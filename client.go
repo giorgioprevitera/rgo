@@ -25,7 +25,7 @@ func getContext() context.Context {
 	return ctx
 }
 
-func getClient() *http.Client {
+func getClient() getter {
 	o := newOauthSession()
 	ctx := getContext()
 	token := o.getToken(ctx)
